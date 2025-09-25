@@ -1,75 +1,125 @@
 name: Update Pinboard Wizard Cask
 
 on:
-  release:
-    types: [published]
+  # Triggered from your app repo via repository_dispatch
+  repository_dispatch:
+    types: [update-cask]
+  # Allow manual runs too
   workflow_dispatch:
     inputs:
       version:
         description: "Version to update to (e.g., v0.2.0)"
         required: true
         type: string
+      download_url:
+        description: "Download URL override (optional)"
+        required: false
+        type: string
+      sha256:
+        description: "SHA256 override (optional)"
+        required: false
+        type: string
+
+permissions:
+  contents: write # needed to push branch
+  pull-requests: write # needed to open PR
 
 jobs:
   update-cask:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest # cask audit requires macOS
     steps:
-      - name: Set up variables
-        id: vars
-        run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            VERSION="${GITHUB_REF#refs/tags/}"
-          else
-            VERSION="${{ github.event.inputs.version }}"
-          fi
-
-          VERSION_NUMBER="${VERSION#v}"
-          DOWNLOAD_URL="https://github.com/RikuVan/pinboard_wizard/releases/download/v${VERSION_NUMBER}/pinboard-wizard-v${VERSION_NUMBER}-macos.tar.gz"
-
-          echo "version_number=${VERSION_NUMBER}" >> $GITHUB_ENV
-          echo "download_url=${DOWNLOAD_URL}" >> $GITHUB_ENV
-
-      - name: Download and calculate SHA256
-        id: sha256
-        run: |
-          curl -L -o artifact.tar.gz "${{ env.download_url }}"
-          SHA256=$(sha256sum artifact.tar.gz | cut -d' ' -f1)
-          echo "sha256=${SHA256}" >> $GITHUB_ENV
-          rm artifact.tar.gz
-
-      - name: Checkout tap repository
+      - name: Checkout tap repo
         uses: actions/checkout@v4
         with:
-          repository: RikuVan/homebrew-formulae
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # This workflow should live IN the tap repo (RikuVan/homebrew-formulae)
+          # so no extra 'repository:' is needed.
+          persist-credentials: false
+
+      - name: Configure Git user
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Resolve inputs (version/url/sha256)
+        id: vars
+        run: |
+          set -euo pipefail
+          # 1) Version
+          if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
+            VERSION="${{ github.event.client_payload.version }}"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            # optional: support running on releases in THIS repo
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          if [[ -z "${VERSION}" ]]; then
+            echo "Missing version"; exit 1
+          fi
+          VERSION_NUMBER="${VERSION#v}"
+
+          # 2) URL
+          if [[ -n "${{ github.event.client_payload.download_url }}" ]]; then
+            DOWNLOAD_URL="${{ github.event.client_payload.download_url }}"
+          elif [[ -n "${{ github.event.inputs.download_url }}" ]]; then
+            DOWNLOAD_URL="${{ github.event.inputs.download_url }}"
+          else
+            DOWNLOAD_URL="https://github.com/RikuVan/pinboard_wizard/releases/download/v${VERSION_NUMBER}/pinboard-wizard-v${VERSION_NUMBER}-macos.tar.gz"
+          fi
+
+          # 3) SHA256
+          if [[ -n "${{ github.event.client_payload.sha256 }}" ]]; then
+            SHA256="${{ github.event.client_payload.sha256 }}"
+          elif [[ -n "${{ github.event.inputs.sha256 }}" ]]; then
+            SHA256="${{ github.event.inputs.sha256 }}"
+          else
+            echo "Computing SHA256 from ${DOWNLOAD_URL} ..."
+            curl -L -o artifact.tar.gz "$DOWNLOAD_URL"
+            SHA256=$(shasum -a 256 artifact.tar.gz | awk '{print $1}')
+            rm -f artifact.tar.gz
+          fi
+
+          echo "version_number=$VERSION_NUMBER" >> "$GITHUB_ENV"
+          echo "download_url=$DOWNLOAD_URL"   >> "$GITHUB_ENV"
+          echo "sha256=$SHA256"               >> "$GITHUB_ENV"
 
       - name: Update cask file
         run: |
-          sed -i "s/^  version .*/  version '${{ env.version_number }}'/" Casks/pinboard-wizard.rb
-          sed -i "s/^  sha256 .*/  sha256 '${{ env.sha256 }}'/" Casks/pinboard-wizard.rb
-          sed -i "s|^  url .*|  url '${{ env.download_url }}'|" Casks/pinboard-wizard.rb
+          set -euo pipefail
+          FILE="Casks/pinboard-wizard.rb"
+
+          # Use BSD sed on macOS
+          sed -i "" "s/^  version .*/  version '${{ env.version_number }}'/" "$FILE"
+          sed -i "" "s/^  sha256 .*/  sha256 '${{ env.sha256 }}'/" "$FILE"
+          sed -i "" "s|^  url .*|  url '${{ env.download_url }}'|" "$FILE"
 
           echo "Updated Cask:"
-          cat Casks/pinboard-wizard.rb
+          cat "$FILE"
 
-      - name: Validate cask
+      - name: Validate cask (fetch & audit)
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
         run: |
-          brew update-reset
-          brew audit --cask --strict ./Casks/pinboard-wizard.rb
+          set -euo pipefail
+          brew fetch --cask --force ./Casks/pinboard-wizard.rb
+          brew audit --cask --online --strict ./Casks/pinboard-wizard.rb
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "Update pinboard-wizard to v${{ env.version_number }}"
-          title: "Update pinboard-wizard to v${{ env.version_number }}"
+          # Use a Personal Access Token with repo access to ensure pushes work.
+          # Save as a secret in THIS repo, e.g. HOMEBREW_TAP_TOKEN
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          commit-message: "pinboard-wizard: update to v${{ env.version_number }}"
+          title: "pinboard-wizard: update to v${{ env.version_number }}"
           body: |
-            Auto-update pinboard-wizard cask to version ${{ env.version_number }}
+            Update pinboard-wizard cask to version **${{ env.version_number }}**.
 
-            - Version: ${{ env.version_number }}
-            - SHA256: ${{ env.sha256 }}
-            - Download URL: ${{ env.download_url }}
+            - URL: ${{ env.download_url }}
+            - SHA256: `${{ env.sha256 }}`
 
-            This PR was automatically created by the update-cask workflow.
-          branch: update-pinboard-wizard-v${{ env.version_number }}
+            Automated PR.
+          branch: update/pinboard-wizard-v${{ env.version_number }}
           delete-branch: true
+          add-paths: |
+            Casks/pinboard-wizard.rb
