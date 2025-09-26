@@ -79,9 +79,10 @@ jobs:
         run: |
           set -euo pipefail
           FILE="Casks/pinboard-wizard.rb"
+          NEW_SHA="${{ env.sha256 }}"
 
           sed -i "" "s/^  version .*/  version '${{ env.version_number }}'/" "$FILE"
-          sed -i "" "s/^  sha256 .*/  sha256 '${{ env.sha256 }}'/" "$FILE"
+          sed -i "" "s/^  sha256 .*/  sha256 \"${{ env.sha256 }}\"/" "$FILE"
           sed -i "" "s|^  url .*|  url '${{ env.download_url }}'|" "$FILE"
 
           # Optional: add minimum macOS if not present
