@@ -84,6 +84,11 @@ jobs:
           sed -i "" "s/^  sha256 .*/  sha256 '${{ env.sha256 }}'/" "$FILE"
           sed -i "" "s|^  url .*|  url '${{ env.download_url }}'|" "$FILE"
 
+          # Optional: add minimum macOS if not present
+          if ! grep -q "depends_on macos" "$FILE"; then
+            echo "  depends_on macos: '>= :sequoia'" >> "$FILE"
+          fi
+
           echo "Updated Cask:"
           cat "$FILE"
 
@@ -98,8 +103,23 @@ jobs:
           HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+
+          # Fetch the cask artifact
           brew fetch --cask --force rikuvan/formulae/pinboard-wizard
-          brew audit --cask --online --strict rikuvan/formulae/pinboard-wizard
+
+          # Determine latest release via livecheck
+          LATEST_VERSION=$(brew livecheck --json=v2 rikuvan/formulae/pinboard-wizard | \
+                           jq -r '.casks[0].version.latest')
+          echo "Latest release according to livecheck: $LATEST_VERSION"
+          echo "Cask version being installed: ${{ env.version_number }}"
+
+          if [[ "${{ env.version_number }}" != "$LATEST_VERSION" ]]; then
+            echo "Version is older than latest release. Skipping online audit."
+            brew audit --cask --strict rikuvan/formulae/pinboard-wizard
+          else
+            echo "Version is latest. Running full online audit."
+            brew audit --cask --online --strict rikuvan/formulae/pinboard-wizard
+          fi
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6
