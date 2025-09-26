@@ -107,9 +107,8 @@ jobs:
           # Fetch the cask artifact
           brew fetch --cask --force rikuvan/formulae/pinboard-wizard
 
-          # Determine latest release via livecheck
-          LATEST_VERSION=$(brew livecheck --json=v2 rikuvan/formulae/pinboard-wizard | \
-                           jq -r '.casks[0].version.latest')
+          # Determine latest release via livecheck (plain text)
+          LATEST_VERSION=$(brew livecheck rikuvan/formulae/pinboard-wizard | awk '{print $1}')
           echo "Latest release according to livecheck: $LATEST_VERSION"
           echo "Cask version being installed: ${{ env.version_number }}"
 
