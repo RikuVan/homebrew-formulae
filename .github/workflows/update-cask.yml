@@ -90,9 +90,7 @@ jobs:
       - name: Link local repo as tap
         run: |
           set -euo pipefail
-          mkdir -p "$(brew --repository)/Library/Taps/rikuvan"
-          ln -s "$PWD" "$(brew --repository)/Library/Taps/rikuvan/homebrew-formulae"
-          brew tap rikuvan/formulae "$(brew --repository)/Library/Taps/rikuvan/homebrew-formulae"
+          brew tap --force-auto-update rikuvan/formulae "$PWD"
 
       - name: Validate cask (fetch & audit)
         env:
