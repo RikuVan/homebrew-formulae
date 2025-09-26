@@ -57,7 +57,7 @@ jobs:
           elif [[ -n "${{ github.event.inputs.download_url }}" ]]; then
             DOWNLOAD_URL="${{ github.event.inputs.download_url }}"
           else
-            DOWNLOAD_URL="https://github.com/RikuVan/pinboard_wizard/releases/download/v${VERSION_NUMBER}/pinboard-wizard-v${VERSION_NUMBER}-macos.tar.gz"
+            DOWNLOAD_URL="https://github.com/RikuVan/pinboard_wizard/releases/download/v${VERSION_NUMBER}/pinboard_wizard.zip"
           fi
 
           if [[ -n "${{ github.event.client_payload.sha256 }}" ]]; then
