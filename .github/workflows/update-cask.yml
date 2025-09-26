@@ -95,6 +95,7 @@ jobs:
       - name: Validate cask (fetch & audit)
         env:
           HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           brew fetch --cask --force rikuvan/formulae/pinboard-wizard
