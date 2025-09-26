@@ -1,10 +1,8 @@
 name: Update Pinboard Wizard Cask
 
 on:
-  # Triggered from your app repo via repository_dispatch
   repository_dispatch:
     types: [update-cask]
-  # Allow manual runs too
   workflow_dispatch:
     inputs:
       version:
@@ -21,18 +19,16 @@ on:
         type: string
 
 permissions:
-  contents: write # needed to push branch
-  pull-requests: write # needed to open PR
+  contents: write
+  pull-requests: write
 
 jobs:
   update-cask:
-    runs-on: macos-latest # cask audit requires macOS
+    runs-on: macos-latest
     steps:
       - name: Checkout tap repo
         uses: actions/checkout@v4
         with:
-          # This workflow should live IN the tap repo (RikuVan/homebrew-formulae)
-          # so no extra 'repository:' is needed.
           persist-credentials: false
 
       - name: Configure Git user
@@ -44,13 +40,11 @@ jobs:
         id: vars
         run: |
           set -euo pipefail
-          # 1) Version
           if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
             VERSION="${{ github.event.client_payload.version }}"
           elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             VERSION="${{ github.event.inputs.version }}"
           else
-            # optional: support running on releases in THIS repo
             VERSION="${GITHUB_REF#refs/tags/}"
           fi
           if [[ -z "${VERSION}" ]]; then
@@ -58,7 +52,6 @@ jobs:
           fi
           VERSION_NUMBER="${VERSION#v}"
 
-          # 2) URL
           if [[ -n "${{ github.event.client_payload.download_url }}" ]]; then
             DOWNLOAD_URL="${{ github.event.client_payload.download_url }}"
           elif [[ -n "${{ github.event.inputs.download_url }}" ]]; then
@@ -67,7 +60,6 @@ jobs:
             DOWNLOAD_URL="https://github.com/RikuVan/pinboard_wizard/releases/download/v${VERSION_NUMBER}/pinboard-wizard-v${VERSION_NUMBER}-macos.tar.gz"
           fi
 
-          # 3) SHA256
           if [[ -n "${{ github.event.client_payload.sha256 }}" ]]; then
             SHA256="${{ github.event.client_payload.sha256 }}"
           elif [[ -n "${{ github.event.inputs.sha256 }}" ]]; then
@@ -88,7 +80,6 @@ jobs:
           set -euo pipefail
           FILE="Casks/pinboard-wizard.rb"
 
-          # Use BSD sed on macOS
           sed -i "" "s/^  version .*/  version '${{ env.version_number }}'/" "$FILE"
           sed -i "" "s/^  sha256 .*/  sha256 '${{ env.sha256 }}'/" "$FILE"
           sed -i "" "s|^  url .*|  url '${{ env.download_url }}'|" "$FILE"
@@ -96,19 +87,24 @@ jobs:
           echo "Updated Cask:"
           cat "$FILE"
 
+      - name: Link local repo as tap
+        run: |
+          set -euo pipefail
+          mkdir -p "$(brew --repository)/Library/Taps/rikuvan"
+          ln -s "$PWD" "$(brew --repository)/Library/Taps/rikuvan/homebrew-formulae"
+          brew tap rikuvan/formulae "$(brew --repository)/Library/Taps/rikuvan/homebrew-formulae"
+
       - name: Validate cask (fetch & audit)
         env:
           HOMEBREW_NO_AUTO_UPDATE: 1
         run: |
           set -euo pipefail
-          brew fetch --cask --force ./Casks/pinboard-wizard.rb
-          brew audit --cask --online --strict ./Casks/pinboard-wizard.rb
+          brew fetch --cask --force rikuvan/formulae/pinboard-wizard
+          brew audit --cask --online --strict rikuvan/formulae/pinboard-wizard
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6
         with:
-          # Use a Personal Access Token with repo access to ensure pushes work.
-          # Save as a secret in THIS repo, e.g. HOMEBREW_TAP_TOKEN
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           commit-message: "pinboard-wizard: update to v${{ env.version_number }}"
           title: "pinboard-wizard: update to v${{ env.version_number }}"
