@@ -9,5 +9,5 @@ cask 'pinboard-wizard' do
 
   depends_on macos: '>= :sequoia'
 
-  app 'Pinboard Wizard.app'
+  app 'pinboard_wizard.app'
 end
