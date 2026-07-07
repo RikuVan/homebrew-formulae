@@ -1,8 +1,8 @@
 cask 'pinboard-wizard' do
-  version '0.7.2'
-  sha256 "dd0099bdec773e028383b104d4152d9cf1e4fb2bc0e65590812b8adb50181724"
+  version '0.8.0'
+  sha256 "2d3a0715e45631cc2de6b0b64b1fab4ce9ffc3e3f6f4fce1c5e87b49950bf7df"
 
-  url 'https://github.com/RikuVan/pinboard_wizard/releases/download/v0.7.2/pinboard_wizard.zip'
+  url 'https://github.com/RikuVan/pinboard_wizard/releases/download/v0.8.0/pinboard_wizard.zip'
   name 'Pinboard Wizard'
   desc 'A macOS client for Pinboard.in built with AI support and backups'
   homepage 'https://github.com/RikuVan/pinboard_wizard'
