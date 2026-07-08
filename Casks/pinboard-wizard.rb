@@ -7,7 +7,7 @@ cask 'pinboard-wizard' do
   desc 'A macOS client for Pinboard.in built with AI support and backups'
   homepage 'https://github.com/RikuVan/pinboard_wizard'
 
-  depends_on macos: '>= :sequoia'
+  depends_on macos: :sequoia
 
   app 'pinboard_wizard.app'
 end
